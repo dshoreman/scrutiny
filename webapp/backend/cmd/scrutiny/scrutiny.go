@@ -37,11 +37,9 @@ func main() {
 		configFilePath = configFilePathAlternative
 	}
 
-	//we're going to load the config file manually, since we need to validate it.
-	err = config.ReadConfig(configFilePath)               // Find and read the config file
-	if _, ok := err.(errors.ConfigFileMissingError); ok { // Handle errors reading the config file
-		//ignore "could not find config file"
-	} else if err != nil {
+	err = config.ReadConfig(configFilePath)
+	// Exit if there are errors with the default config, unless it doesn't exist
+	if _, missing := err.(errors.ConfigFileMissingError); err != nil && !missing {
 		log.Print(color.HiRedString("CONFIG ERROR: %v", err))
 		os.Exit(1)
 	}
@@ -58,6 +56,22 @@ OPTIONS:
    {{range .VisibleFlags}}{{.}}
    {{end}}{{end}}
 `
+
+	flags := map[string]cli.Flag{
+		"config": &cli.StringFlag{
+			Name:  "config",
+			Aliases: []string{"C"},
+			Usage: "Specify the path to the config file",
+			Action: func(c *cli.Context, filePath string) error {
+				if filePath != "" {
+					if err := config.ReadConfig(filePath); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		},
+	}
 
 	app := &cli.App{
 		Name:     "scrutiny",
@@ -94,13 +108,7 @@ OPTIONS:
 
 			return nil
 		},
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:  "config",
-				Aliases: []string{"C"},
-				Usage: "Specify the path to the config file",
-			},
-		},
+		Flags: []cli.Flag{flags["config"]},
 		Commands: []*cli.Command{
 			{
 				Name: "device",
@@ -109,13 +117,6 @@ OPTIONS:
 					Name: "list",
 					Usage: "Get information about all devices in Scrutiny",
 					Action: func(c *cli.Context) error {
-						if c.IsSet("config") {
-							if err = config.ReadConfig(c.String("config")); err != nil {
-								fmt.Printf("Could not find config file at specified path: %s", c.String("config"))
-								return err
-							}
-						}
-
 						logger, logFile, err := CreateLogger(config)
 						if logFile != nil {
 							defer logFile.Close()
@@ -135,13 +136,6 @@ OPTIONS:
 					Name: "patch",
 					Usage: "Scan for and/or patch metadata discrepencies",
 					Action: func(c *cli.Context) error {
-						if c.IsSet("config") {
-							if err = config.ReadConfig(c.String("config")); err != nil {
-								fmt.Printf("Could not find config file at specified path: %s", c.String("config"))
-								return err
-							}
-						}
-
 						logger, logFile, err := CreateLogger(config)
 						if logFile != nil {
 							defer logFile.Close()
@@ -160,25 +154,32 @@ OPTIONS:
 			}, {
 				Name:  "start",
 				Usage: "Start the scrutiny server",
+				Flags: []cli.Flag{
+					flags["config"],
+					&cli.BoolFlag{
+						Name: "debug",
+						EnvVars: []string{"SCRUTINY_DEBUG", "DEBUG"},
+						Usage: "Enable debug logging",
+						Action: func(c *cli.Context, enabled bool) error {
+							if enabled {
+								config.Set("log.level", "DEBUG")
+							}
+							return nil
+						},
+					},
+					&cli.StringFlag{
+						Name:"log-file",
+						Usage:"Path to file for logging. Leave empty to use STDOUT",
+						Value:"",
+						EnvVars: []string{"SCRUTINY_LOG_FILE"},
+						Action: func(c *cli.Context, filePath string) error {
+							config.Set("log.file", filePath)
+							return nil
+						},
+					},
+				},
 				Action: func(c *cli.Context) error {
 					fmt.Fprintln(c.App.Writer, c.Command.Usage)
-					if c.IsSet("config") {
-						err = config.ReadConfig(c.String("config")) // Find and read the config file
-						if err != nil {                             // Handle errors reading the config file
-							//ignore "could not find config file"
-							fmt.Printf("Could not find config file at specified path: %s", c.String("config"))
-							return err
-						}
-					}
-
-					if c.Bool("debug") {
-						config.Set("log.level", "DEBUG")
-					}
-
-					if c.IsSet("log-file") {
-						config.Set("log.file", c.String("log-file"))
-					}
-
 					webLogger, logFile, err := CreateLogger(config)
 					if logFile != nil {
 						defer logFile.Close()
@@ -193,25 +194,6 @@ OPTIONS:
 					webServer := web.AppEngine{Config: config, Logger: webLogger}
 
 					return webServer.Start()
-				},
-
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:  "config",
-						Usage: "Specify the path to the config file",
-					},
-					&cli.StringFlag{
-						Name:    "log-file",
-						Usage:   "Path to file for logging. Leave empty to use STDOUT",
-						Value:   "",
-						EnvVars: []string{"SCRUTINY_LOG_FILE"},
-					},
-
-					&cli.BoolFlag{
-						Name:    "debug",
-						Usage:   "Enable debug logging",
-						EnvVars: []string{"SCRUTINY_DEBUG", "DEBUG"},
-					},
 				},
 			},
 		},

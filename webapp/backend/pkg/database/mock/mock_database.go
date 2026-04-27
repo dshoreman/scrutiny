@@ -103,6 +103,21 @@ func (mr *MockDeviceRepoMockRecorder) GetDevices(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDevices", reflect.TypeOf((*MockDeviceRepo)(nil).GetDevices), ctx)
 }
 
+// GetSortedDevices mocks base method.
+func (m *MockDeviceRepo) GetSortedDevices(ctx context.Context) ([]models.Device, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSortedDevices", ctx)
+	ret0, _ := ret[0].([]models.Device)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSortedDevices indicates an expected call of GetDevices.
+func (mr *MockDeviceRepoMockRecorder) GetSortedDevices(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSortedDevices", reflect.TypeOf((*MockDeviceRepo)(nil).GetDevices), ctx)
+}
+
 // GetSmartAttributeHistory mocks base method.
 func (m *MockDeviceRepo) GetSmartAttributeHistory(ctx context.Context, scrutiny_uuid uuid.UUID, durationKey string, selectEntries, selectEntriesOffset int, attributes []string) ([]measurements.Smart, error) {
 	m.ctrl.T.Helper()
