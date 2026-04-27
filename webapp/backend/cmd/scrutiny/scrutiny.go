@@ -130,6 +130,32 @@ OPTIONS:
 						}
 						return deviceListAction(c, db)
 					},
+
+				}, {
+					Name: "patch",
+					Usage: "Scan for and/or patch metadata discrepencies",
+					Action: func(c *cli.Context) error {
+						if c.IsSet("config") {
+							if err = config.ReadConfig(c.String("config")); err != nil {
+								fmt.Printf("Could not find config file at specified path: %s", c.String("config"))
+								return err
+							}
+						}
+
+						logger, logFile, err := CreateLogger(config)
+						if logFile != nil {
+							defer logFile.Close()
+						}
+						if err != nil {
+							return err
+						}
+
+						db, err := database.NewScrutinyRepository(config, logger)
+						if err != nil {
+							panic(err)
+						}
+						return devicePatchAction(c, db)
+					},
 				}},
 			}, {
 				Name:  "start",
