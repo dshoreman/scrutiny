@@ -34,11 +34,34 @@ func deviceListAction(c *cli.Context, db database.DeviceRepo) error {
 }
 
 func devicePatchAction(c *cli.Context, db database.DeviceRepo) error {
-	devices, err := loadDevices(c, db)
-	if err != nil {
-		return err
-	}
+	screen := "detect"
+	for {
+		devices, err := loadDevices(c, db)
+		if err != nil {
+			return err
+		}
 
+		reload:
+		for {
+			switch screen {
+			case "detect":
+				devicePatchList(c, devices)
+				fmt.Println()
+				fmt.Println("  [r] Refresh devices")
+				fmt.Println("  [q] Quit")
+				for {
+					switch lineFromStdIn() {
+						case "r": break reload
+						case "q": return cli.Exit("Goodbye!", 0)
+						default: fmt.Println("Invalid selection")
+					}
+				}
+			}
+		}
+	}
+}
+
+func devicePatchList(c *cli.Context, devices []models.Device) {
 	var diskRows, uuidRows [][]string
 	var ghosts []models.Device
 
@@ -65,7 +88,14 @@ func devicePatchAction(c *cli.Context, db database.DeviceRepo) error {
 			rpad(row[0], lengths[0]), rpad(row[1], lengths[1]), row[2],
 			rpad(uuidRows[i][0], lengths[0]), uuidRows[i][1])
 	}
-	return nil
+}
+
+func lineFromStdIn() string {
+	var selection string
+	fmt.Print("\nEnter selection: ")
+	fmt.Scanln(&selection)
+
+	return selection
 }
 
 func loadDevices(c *cli.Context, db database.DeviceRepo) ([]models.Device, error) {
