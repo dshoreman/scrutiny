@@ -57,6 +57,17 @@ func (sr *scrutinyRepository) GetDevices(ctx context.Context) ([]models.Device, 
 	return devices, nil
 }
 
+// Get a list of all devices sorted by host_id, device_name, and created_at
+func (sr *scrutinyRepository) GetSortedDevices(ctx context.Context) ([]models.Device, error) {
+	devices := []models.Device{}
+	if err := sr.gormClient.WithContext(ctx).
+		Order("host_id asc, device_name asc, created_at asc").
+		Find(&devices).Error; err != nil {
+		return nil, fmt.Errorf("could not get sorted devices from DB: %v", err)
+	}
+	return devices, nil
+}
+
 // update device (only metadata) from collector
 func (sr *scrutinyRepository) UpdateDevice(ctx context.Context, deviceID string, collectorSmartData *collector.SmartInfo) (models.Device, error) {
 	var device models.Device

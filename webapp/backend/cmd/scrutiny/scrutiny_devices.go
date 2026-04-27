@@ -70,7 +70,7 @@ func devicePatchAction(c *cli.Context, db database.DeviceRepo) error {
 
 func loadDevices(c *cli.Context, db database.DeviceRepo) ([]models.Device, error) {
 	fmt.Printf("\n Loading devices...\n")
-	devices, err := db.GetDevices(c.Context)
+	devices, err := db.GetSortedDevices(c.Context)
 	if err != nil {
 		return nil, fmt.Errorf("Could not load devices: %v", err)
 	}

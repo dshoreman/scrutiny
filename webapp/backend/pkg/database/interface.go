@@ -32,6 +32,7 @@ type DeviceRepo interface {
 
 	RegisterDevice(ctx context.Context, dev models.Device) error
 	GetDevices(ctx context.Context) ([]models.Device, error)
+	GetSortedDevices(ctx context.Context) ([]models.Device, error)
 	UpdateDevice(ctx context.Context, deviceID string, collectorSmartData *collector.SmartInfo) (models.Device, error)
 	UpdateDeviceStatus(ctx context.Context, deviceID string, status pkg.DeviceStatus) (models.Device, error)
 	ResetDeviceStatus(ctx context.Context, deviceID string) (models.Device, error)
