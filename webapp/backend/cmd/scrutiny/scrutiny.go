@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/analogj/scrutiny/webapp/backend/pkg/config"
+	"github.com/analogj/scrutiny/webapp/backend/pkg/database"
 	"github.com/analogj/scrutiny/webapp/backend/pkg/errors"
 	"github.com/analogj/scrutiny/webapp/backend/pkg/version"
 	"github.com/analogj/scrutiny/webapp/backend/pkg/web"
@@ -70,7 +71,6 @@ OPTIONS:
 			},
 		},
 		Before: func(c *cli.Context) error {
-
 			scrutiny := "github.com/AnalogJ/scrutiny"
 
 			var versionInfo string
@@ -94,9 +94,44 @@ OPTIONS:
 
 			return nil
 		},
-
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "config",
+				Aliases: []string{"C"},
+				Usage: "Specify the path to the config file",
+			},
+		},
 		Commands: []*cli.Command{
 			{
+				Name: "device",
+				Usage: "Tools to manage disk metadata",
+				Subcommands: []*cli.Command{{
+					Name: "list",
+					Usage: "Get information about all devices in Scrutiny",
+					Action: func(c *cli.Context) error {
+						if c.IsSet("config") {
+							if err = config.ReadConfig(c.String("config")); err != nil {
+								fmt.Printf("Could not find config file at specified path: %s", c.String("config"))
+								return err
+							}
+						}
+
+						logger, logFile, err := CreateLogger(config)
+						if logFile != nil {
+							defer logFile.Close()
+						}
+						if err != nil {
+							return err
+						}
+
+						db, err := database.NewScrutinyRepository(config, logger)
+						if err != nil {
+							panic(err)
+						}
+						return deviceListAction(c, db)
+					},
+				}},
+			}, {
 				Name:  "start",
 				Usage: "Start the scrutiny server",
 				Action: func(c *cli.Context) error {
@@ -160,7 +195,6 @@ OPTIONS:
 	if err != nil {
 		log.Fatal(color.HiRedString("ERROR: %v", err))
 	}
-
 }
 
 func CreateLogger(appConfig config.Interface) (*logrus.Entry, *os.File, error) {
