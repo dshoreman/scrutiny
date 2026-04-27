@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/analogj/scrutiny/collector/pkg/detect"
@@ -34,6 +35,7 @@ func deviceListAction(c *cli.Context, db database.DeviceRepo) error {
 }
 
 func devicePatchAction(c *cli.Context, db database.DeviceRepo) error {
+	var disk models.Device
 	screen := "detect"
 	for {
 		devices, err := loadDevices(c, db)
@@ -45,15 +47,21 @@ func devicePatchAction(c *cli.Context, db database.DeviceRepo) error {
 		for {
 			switch screen {
 			case "detect":
-				devicePatchList(c, devices)
-				fmt.Println()
+				ghosts := devicePatchList(c, devices)
+				fmt.Printf("\n  [0-%d] Review selected ghost\n\n", len(ghosts)-1)
 				fmt.Println("  [r] Refresh devices")
 				fmt.Println("  [q] Quit")
 				for {
-					switch lineFromStdIn() {
+					switch reply := lineFromStdIn(); reply {
 						case "r": break reload
 						case "q": return cli.Exit("Goodbye!", 0)
-						default: fmt.Println("Invalid selection")
+						default:
+							if i, err := strconv.Atoi(reply); err == nil && i >= 0 && i < len(ghosts) {
+								disk = ghosts[i]
+								fmt.Printf("Selected ghost %d, %s/%s\n", i, disk.HostId, disk.DeviceName)
+								return nil
+							}
+							fmt.Println("Invalid selection")
 					}
 				}
 			}
@@ -61,17 +69,17 @@ func devicePatchAction(c *cli.Context, db database.DeviceRepo) error {
 	}
 }
 
-func devicePatchList(c *cli.Context, devices []models.Device) {
+func devicePatchList(c *cli.Context, devices []models.Device) []models.Device {
 	var diskRows, uuidRows [][]string
 	var ghosts []models.Device
 
-	lengths := []int{36 + len("Actual UUID: "), 0, 0}
+	lengths := []int{0, 36 + len("Actual UUID: "), 0, 0}
 	for _, device := range devices {
 		// If there's no serial or WWN doesn't match it, it's not the ghost we're looking for
 		if len(device.SerialNumber) > 0 && device.WWN == strings.ToLower(device.SerialNumber) {
 			// Recalculate ScrutinyUUID to adjust for removed Serial WWN fallback in v0.9.{0,1}
 			newUUID := detect.GenerateScrutinyUUID(device.ModelName, device.SerialNumber, "").String()
-			row := []string{
+			row := []string{fmt.Sprintf("[%d]", len(ghosts)),
 				fmt.Sprintf("%s/%s - %s", device.HostId, device.DeviceName, device.ModelName),
 				fmt.Sprintf("Serial '%s',", device.SerialNumber),
 				fmt.Sprintf("WWN: '%s'", device.WWN)}
@@ -84,10 +92,11 @@ func devicePatchList(c *cli.Context, devices []models.Device) {
 
 	fmt.Printf("  Scan of %d devices found %d ghosts:\n\n", len(devices), len(ghosts))
 	for i, row := range diskRows {
-		fmt.Printf("  > %s \t%s\t%s\n    %s \t%s\n",
-			rpad(row[0], lengths[0]), rpad(row[1], lengths[1]), row[2],
-			rpad(uuidRows[i][0], lengths[0]), uuidRows[i][1])
+		fmt.Printf("  %s %s \t%s\t%s\n  %s %s \t%s\n",
+			lpad(row[0], lengths[0]), rpad(row[1], lengths[1]), rpad(row[2], lengths[2]), row[3],
+			lpad("", lengths[0]), rpad(uuidRows[i][0], lengths[1]), uuidRows[i][1])
 	}
+	return ghosts
 }
 
 func lineFromStdIn() string {
@@ -107,6 +116,9 @@ func loadDevices(c *cli.Context, db database.DeviceRepo) ([]models.Device, error
 	return devices, nil
 }
 
+func lpad(str string, length int) string {
+	return strings.Repeat(" ", length - len(str)) + str
+}
 func rpad(str string, length int) string {
 	return str + strings.Repeat(" ", length - len(str))
 }
