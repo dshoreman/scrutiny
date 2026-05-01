@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -45,6 +46,7 @@ func devicePatchAction(c *cli.Context, db database.DeviceRepo) error {
 
 		reload:
 		for {
+			next:
 			switch screen {
 			case "detect":
 				ghosts := devicePatchList(c, devices)
@@ -58,9 +60,24 @@ func devicePatchAction(c *cli.Context, db database.DeviceRepo) error {
 						default:
 							if i, err := strconv.Atoi(reply); err == nil && i >= 0 && i < len(ghosts) {
 								disk = ghosts[i]
-								fmt.Printf("Selected ghost %d, %s/%s\n", i, disk.HostId, disk.DeviceName)
-								return nil
+								screen = "review"
+								break next
 							}
+							fmt.Println("Invalid selection")
+					}
+				}
+			case "review":
+				devicePatchReview(&disk, devices)
+				fmt.Println()
+				fmt.Println("  [r] Refresh comparison")
+				fmt.Println("  [m] Previous menu")
+				fmt.Println("  [q] Quit")
+				for {
+					switch lineFromStdIn() {
+						case "r": break reload
+						case "m": screen = "detect"; break next
+						case "q": return cli.Exit("Goodbye!", 0)
+						default:
 							fmt.Println("Invalid selection")
 					}
 				}
@@ -99,6 +116,38 @@ func devicePatchList(c *cli.Context, devices []models.Device) []models.Device {
 	return ghosts
 }
 
+func devicePatchReview(ghost *models.Device, devices []models.Device) {
+	var clone models.Device
+	searchUUID := detect.GenerateScrutinyUUID(ghost.ModelName, ghost.SerialNumber, "")
+	for _, device := range devices {
+		if device.ScrutinyUUID == searchUUID {
+			clone = device
+			break
+		}
+	}
+
+	lengths, rows := []int{0, 0, 0}, [][]string{
+		{"", "Original", "Clone"},
+		{"Device Name", ghost.HostId + "/" + ghost.DeviceName, clone.HostId + "/" + clone.DeviceName},
+		{"Model Name", ghost.ModelName, clone.ModelName},
+		{"Serial Number", ghost.SerialNumber, clone.SerialNumber},
+		{"WWN", ghost.WWN, clone.WWN},
+		{"Device UUID", ghost.DeviceUUID, clone.DeviceUUID},
+		{"Scrutiny UUID", ghost.ScrutinyUUID.String(), clone.ScrutinyUUID.String()},
+		{"Registered", ghost.CreatedAt.String(), clone.CreatedAt.String()},
+		{"Last Updated", ghost.UpdatedAt.String(), clone.UpdatedAt.String()},
+		{"Serial ID", ghost.DeviceSerialID, clone.DeviceSerialID},
+	}
+	for _, row := range rows {
+		setLengths(row, lengths)
+	}
+	fmt.Println()
+	for _, row := range rows {
+		fmt.Printf("  %s │   %s   │   %s\n", lpad(row[0], lengths[0]),
+			opad(row[1], lengths[1]), opad(row[2], lengths[2]))
+	}
+}
+
 func lineFromStdIn() string {
 	var selection string
 	fmt.Print("\nEnter selection: ")
@@ -118,6 +167,11 @@ func loadDevices(c *cli.Context, db database.DeviceRepo) ([]models.Device, error
 
 func lpad(str string, length int) string {
 	return strings.Repeat(" ", length - len(str)) + str
+}
+func opad(str string, length int) string {
+	padlen := float64(length - len(str)) / 2
+	lpad, rpad := int(math.Floor(padlen)), int(math.Ceil(padlen))
+	return strings.Repeat(" ", lpad) + str + strings.Repeat(" ", rpad)
 }
 func rpad(str string, length int) string {
 	return str + strings.Repeat(" ", length - len(str))
