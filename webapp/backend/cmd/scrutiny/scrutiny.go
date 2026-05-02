@@ -4,16 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"time"
 
 	"github.com/analogj/scrutiny/webapp/backend/pkg/config"
 	"github.com/analogj/scrutiny/webapp/backend/pkg/database"
-	"github.com/analogj/scrutiny/webapp/backend/pkg/errors"
 	"github.com/analogj/scrutiny/webapp/backend/pkg/version"
 	"github.com/analogj/scrutiny/webapp/backend/pkg/web"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	utils "github.com/analogj/go-util/utils"
 	"github.com/fatih/color"
@@ -23,25 +21,22 @@ import (
 var goos string
 var goarch string
 
-func main() {
+func init() {
+	// Enable displaying times in initial logs, then later
+	// switch to runtime logging when starting the server
+	log.SetLevel(log.WarnLevel)
+	log.SetFormatter(&log.TextFormatter{
+		DisableLevelTruncation: true,
+		FullTimestamp: true,
+		TimestampFormat: time.TimeOnly,
+		PadLevelText: true,
+	})
+}
 
+func main() {
 	config, err := config.Create()
 	if err != nil {
-		fmt.Printf("FATAL: %+v\n", err)
-		os.Exit(1)
-	}
-
-	configFilePath := "/opt/scrutiny/config/scrutiny.yaml"
-	configFilePathAlternative := "/opt/scrutiny/config/scrutiny.yml"
-	if !utils.FileExists(configFilePath) && utils.FileExists(configFilePathAlternative) {
-		configFilePath = configFilePathAlternative
-	}
-
-	err = config.ReadConfig(configFilePath)
-	// Exit if there are errors with the default config, unless it doesn't exist
-	if _, missing := err.(errors.ConfigFileMissingError); err != nil && !missing {
-		log.Print(color.HiRedString("CONFIG ERROR: %v", err))
-		os.Exit(1)
+		log.Fatalf("%+v\n", err)
 	}
 
 	flags := map[string]cli.Flag{
@@ -51,9 +46,7 @@ func main() {
 			Usage: "Specify the path to the config file",
 			Action: func(c *cli.Context, filePath string) error {
 				if filePath != "" {
-					if err := config.ReadConfig(filePath); err != nil {
-						return err
-					}
+					return config.ReadConfig(filePath)
 				}
 				return nil
 			},
@@ -85,14 +78,28 @@ func main() {
 			subtitle := scrutiny + utils.LeftPad2Len(versionInfo, " ", 65-len(scrutiny))
 
 			color.New(color.FgGreen).Fprintf(c.App.Writer, utils.StripIndent(
-				`
-			 ___   ___  ____  __  __  ____  ____  _  _  _  _
-			/ __) / __)(  _ \(  )(  )(_  _)(_  _)( \( )( \/ )
-			\__ \( (__  )   / )(__)(   )(   _)(_  )  (  \  /
-			(___/ \___)(_)\_)(______) (__) (____)(_)\_) (__)
-			%s
+				` ___   ___  ____  __  __  ____  ____  _  _  _  _
+				/ __) / __)(  _ \(  )(  )(_  _)(_  _)( \( )( \/ )
+				\__ \( (__  )   / )(__)(   )(   _)(_  )  (  \  /
+				(___/ \___)(_)\_)(______) (__) (____)(_)\_) (__)
+				%s
 
 			`), subtitle)
+
+			configFilePath := "/opt/scrutiny/config/scrutiny.yaml"
+			configFilePathAlternative := "/opt/scrutiny/config/scrutiny.yml"
+			if !utils.FileExists(configFilePath) {
+				configFilePath = configFilePathAlternative
+			}
+			if utils.FileExists(configFilePath) {
+				if err = config.ReadConfig(configFilePath); err != nil {
+					log.Fatal(color.HiRedString("CONFIG ERROR: %v", err))
+				}
+			} else if !c.IsSet("config") {
+				// Warn if no global config was found, but avoid double-logging if a local file is given
+				log.Warn("No configuration file found. Using defaults.")
+				log.Warn("To hide this warning, pass --config or create /opt/scrutiny/config/scrutiny.yaml")
+			}
 
 			return nil
 		},
@@ -106,17 +113,9 @@ func main() {
 					Name: "list",
 					Usage: "Get information about all devices in Scrutiny",
 					Action: func(c *cli.Context) error {
-						logger, logFile, err := CreateLogger(config)
-						if logFile != nil {
-							defer logFile.Close()
-						}
+						db, err := database.NewScrutinyRepository(config, plainLogger())
 						if err != nil {
-							return err
-						}
-
-						db, err := database.NewScrutinyRepository(config, logger)
-						if err != nil {
-							panic(err)
+							log.Fatal(err)
 						}
 						return deviceListAction(c, db)
 					},
@@ -140,17 +139,9 @@ func main() {
 						"      on an older version, it's best to stop and update them BEFORE fixing legacy WWNs.\n" +
 						"      If you patch ghosts with a legacy collector active, it could re-create the ghost.",
 					Action: func(c *cli.Context) error {
-						logger, logFile, err := CreateLogger(config)
-						if logFile != nil {
-							defer logFile.Close()
-						}
+						db, err := database.NewScrutinyRepository(config, plainLogger())
 						if err != nil {
-							return err
-						}
-
-						db, err := database.NewScrutinyRepository(config, logger)
-						if err != nil {
-							panic(err)
+							log.Fatal(err)
 						}
 						return devicePatchAction(c, db)
 					},
@@ -184,8 +175,8 @@ func main() {
 					},
 				},
 				Action: func(c *cli.Context) error {
-					fmt.Fprintln(c.App.Writer, c.Command.Usage)
-					webLogger, logFile, err := CreateLogger(config)
+					log.Println("Starting Scrutiny server")
+					webLogger, logFile, err := CreateWebLogger(config)
 					if logFile != nil {
 						defer logFile.Close()
 					}
@@ -210,26 +201,30 @@ func main() {
 	}
 }
 
-func CreateLogger(appConfig config.Interface) (*logrus.Entry, *os.File, error) {
-	logger := logrus.WithFields(logrus.Fields{
-		"type": "web",
-	})
-	//set default log level
-	if level, err := logrus.ParseLevel(appConfig.GetString("log.level")); err == nil {
-		logger.Logger.SetLevel(level)
+func CreateWebLogger(appConfig config.Interface) (*log.Entry, *os.File, error) {
+	log.SetFormatter(&log.TextFormatter{})
+	if level, err := log.ParseLevel(appConfig.GetString("log.level")); err == nil {
+		log.SetLevel(level)
 	} else {
-		logger.Logger.SetLevel(logrus.InfoLevel)
+		log.SetLevel(log.InfoLevel)
 	}
 
-	var logFile *os.File
-	var err error
-	if appConfig.IsSet("log.file") && len(appConfig.GetString("log.file")) > 0 {
-		logFile, err = os.OpenFile(appConfig.GetString("log.file"), os.O_CREATE|os.O_WRONLY, 0644)
-		if err != nil {
-			logger.Logger.Errorf("Failed to open log file %s for output: %s", appConfig.GetString("log.file"), err)
-			return nil, logFile, err
-		}
-		logger.Logger.SetOutput(io.MultiWriter(os.Stderr, logFile))
+	logger := log.WithFields(log.Fields{"type": "web"})
+	logFilePath := appConfig.GetString("log.file")
+	if len(logFilePath) == 0 {
+		return logger, nil, nil
 	}
+
+	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		logger.Errorf("Failed to open log file %s for output: %s", logFilePath, err)
+		return nil, logFile, err
+	}
+
+	logger.Logger.SetOutput(io.MultiWriter(os.Stderr, logFile))
 	return logger, logFile, nil
+}
+
+func plainLogger() log.FieldLogger {
+	return log.WithFields(log.Fields{})
 }

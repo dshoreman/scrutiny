@@ -1,12 +1,13 @@
 package config
 
 import (
-	"github.com/analogj/go-util/utils"
-	"github.com/analogj/scrutiny/webapp/backend/pkg/errors"
-	"github.com/spf13/viper"
-	"log"
 	"os"
 	"strings"
+
+	"github.com/analogj/go-util/utils"
+	"github.com/analogj/scrutiny/webapp/backend/pkg/errors"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 const DB_USER_SETTINGS_SUBKEY = "user"
@@ -90,7 +91,7 @@ func (c *configuration) ReadConfig(configFilePath string) error {
 	}
 
 	if !utils.FileExists(configFilePath) {
-		log.Printf("No configuration file found at %v. Using Defaults.", configFilePath)
+		log.Warnf("No configuration file found at %v. Using Defaults.", configFilePath)
 		return errors.ConfigFileMissingError("The configuration file could not be found.")
 	}
 
@@ -105,7 +106,7 @@ func (c *configuration) ReadConfig(configFilePath string) error {
 
 	config_data, err := os.Open(configFilePath)
 	if err != nil {
-		log.Printf("Error reading configuration file: %s", err)
+		log.Errorf("Error reading configuration file: %s", err)
 		return err
 	}
 
