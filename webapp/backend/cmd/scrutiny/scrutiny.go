@@ -34,6 +34,7 @@ func init() {
 }
 
 func main() {
+	var vLevel int
 	config, err := config.Create()
 	if err != nil {
 		log.Fatalf("FATAL: %+v\n", err)
@@ -51,12 +52,36 @@ func main() {
 				return nil
 			},
 		},
+		"verbose": &cli.BoolFlag{
+			Name: "verbose",
+			Count: &vLevel,
+			Aliases: []string{"V"},
+			EnvVars: []string{"SCRUTINY_DEBUG", "DEBUG"},
+			Usage: "Enable verbose output; passing twice enables debug messages.",
+			Action: func(c *cli.Context, enabled bool) error {
+				// Never called if vLevel == 0 (-v wasn't passed), but enabled
+				// can still be false if someone passed e.g. '-VV -V=false'.
+				log.Warnf("Verbose flag passed %d times! Enabled=%+v", vLevel, enabled)
+				if enabled && vLevel >= 2 {
+					log.SetLevel(log.DebugLevel)
+				} else if enabled {
+					log.SetLevel(log.InfoLevel)
+				} else {
+					// Scrutiny doesn't really use warnings yet. This simple ensures
+					// any future warnings aren't accidentally hidden, while still
+					// supressing general info messages in non-server commands.
+					log.SetLevel(log.WarnLevel)
+				}
+				return nil
+			},
+		},
 	}
 
 	app := &cli.App{
 		Name:     "scrutiny",
 		Usage:    "WebUI for smartd S.M.A.R.T monitoring",
 		UsageText: "scrutiny [global options] [COMMAND [command options]]",
+		UseShortOptionHandling: true,
 		Version:  version.VERSION,
 		Compiled: time.Now(),
 		Authors: []*cli.Author{
@@ -104,7 +129,7 @@ func main() {
 
 			return nil
 		},
-		Flags: []cli.Flag{flags["config"]},
+		Flags: []cli.Flag{flags["config"], flags["verbose"]},
 		Commands: []*cli.Command{
 			{
 				Name: "device",
@@ -123,6 +148,7 @@ func main() {
 
 				}, {
 					Name: "patch",
+					Flags: []cli.Flag{flags["verbose"]},
 					Usage: "Scan for and/or patch metadata discrepencies",
 					UsageText: "scrutiny [-C config.yaml] device patch [options]",
 					Description:
@@ -155,6 +181,7 @@ func main() {
 					flags["config"],
 					&cli.BoolFlag{
 						Name: "debug",
+						Aliases: []string{"V"},
 						EnvVars: []string{"SCRUTINY_DEBUG", "DEBUG"},
 						Usage: "Enable debug logging",
 						Action: func(c *cli.Context, enabled bool) error {
