@@ -44,19 +44,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	cli.CommandHelpTemplate = `NAME:
-   {{.HelpName}} - {{.Usage}}
-USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Category}}
-CATEGORY:
-   {{.Category}}{{end}}{{if .Description}}
-DESCRIPTION:
-   {{.Description}}{{end}}{{if .VisibleFlags}}
-OPTIONS:
-   {{range .VisibleFlags}}{{.}}
-   {{end}}{{end}}
-`
-
 	flags := map[string]cli.Flag{
 		"config": &cli.StringFlag{
 			Name:  "config",
@@ -76,6 +63,7 @@ OPTIONS:
 	app := &cli.App{
 		Name:     "scrutiny",
 		Usage:    "WebUI for smartd S.M.A.R.T monitoring",
+		UsageText: "scrutiny [global options] [COMMAND [command options]]",
 		Version:  version.VERSION,
 		Compiled: time.Now(),
 		Authors: []*cli.Author{
@@ -113,6 +101,7 @@ OPTIONS:
 			{
 				Name: "device",
 				Usage: "Tools to manage disk metadata",
+				UsageText: "scrutiny [-C config] device [-h] [COMMAND [command options]]",
 				Subcommands: []*cli.Command{{
 					Name: "list",
 					Usage: "Get information about all devices in Scrutiny",
@@ -135,6 +124,21 @@ OPTIONS:
 				}, {
 					Name: "patch",
 					Usage: "Scan for and/or patch metadata discrepencies",
+					UsageText: "scrutiny [-C config.yaml] device patch [options]",
+					Description:
+						"An interactive tool to help identify and resolve potential issues with device information.\n" +
+						"When run without options, it will autodetect any devices with legacy serial-based fallback WWNs.\n" +
+						"Select a device at the prompt and you'll be shown a comparison of the matching duplicate device.\n" +
+						"Once you've confirmed the results are indeed duplicates, you can proceed to automerge the data.\n\n" +
+						"Automatic merge will find all history entries for the old device in Influxdb and replace\n" +
+						"their UUIDs with the correctly regenerated UUID based on v0.9.0+ empty WWN fallbacks.\n" +
+						"Once historical data is merged, the creation date of the new SQLite entry will be set\n" +
+						"to that of the original (ghost) device before removing the ghost from the database.\n\n" +
+						"Note: If no clone is found, this tool will instead update the UUID and WWN of the ghost,\n" +
+						"      so next time the respective collector is run it will already have the correct UUID.\n" +
+						"      This assumes collectors are updated to at least v0.9. If you still have collectors\n" +
+						"      on an older version, it's best to stop and update them BEFORE fixing legacy WWNs.\n" +
+						"      If you patch ghosts with a legacy collector active, it could re-create the ghost.",
 					Action: func(c *cli.Context) error {
 						logger, logFile, err := CreateLogger(config)
 						if logFile != nil {
@@ -154,6 +158,7 @@ OPTIONS:
 			}, {
 				Name:  "start",
 				Usage: "Start the scrutiny server",
+				UsageText: "scrutiny [-C config.yaml] start [options]",
 				Flags: []cli.Flag{
 					flags["config"],
 					&cli.BoolFlag{
