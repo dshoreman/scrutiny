@@ -9,7 +9,7 @@ import (
 // mockgen -source=webapp/backend/pkg/config/interface.go -destination=webapp/backend/pkg/config/mock/mock_config.go
 type Interface interface {
 	Init() error
-	ReadConfig(configFilePath string, logger *logrus.Entry) error
+	ReadConfig(configFilePath string) error
 	WriteConfig() error
 	Set(key string, value interface{})
 	SetDefault(key string, value interface{})

@@ -213,9 +213,9 @@ func (m *MockInterface) ReadConfig(configFilePath string, logger *logrus.Entry) 
 }
 
 // ReadConfig indicates an expected call of ReadConfig.
-func (mr *MockInterfaceMockRecorder) ReadConfig(configFilePath, logger interface{}) *gomock.Call {
+func (mr *MockInterfaceMockRecorder) ReadConfig(configFilePath) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadConfig", reflect.TypeOf((*MockInterface)(nil).ReadConfig), configFilePath, logger)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadConfig", reflect.TypeOf((*MockInterface)(nil).ReadConfig), configFilePath)
 }
 
 // Set mocks base method.
