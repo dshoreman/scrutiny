@@ -205,9 +205,9 @@ func (mr *MockInterfaceMockRecorder) MergeConfigMap(cfg interface{}) *gomock.Cal
 }
 
 // ReadConfig mocks base method.
-func (m *MockInterface) ReadConfig(configFilePath string, logger *logrus.Entry) error {
+func (m *MockInterface) ReadConfig(configFilePath string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReadConfig", configFilePath, logger)
+	ret := m.ctrl.Call(m, "ReadConfig", configFilePath)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
